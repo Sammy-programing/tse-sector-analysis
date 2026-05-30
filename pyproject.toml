@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+testpaths = ["data_ingestion/tests", "analysis/tests", "api/tests"]
+addopts = "-v --cov=data_ingestion --cov=analysis --cov=api --cov-report=html"
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"
