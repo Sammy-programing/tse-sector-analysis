@@ -17,3 +17,4 @@ Reparsing as ES module because module syntax was detected. This incurs a perform
 To eliminate this warning, add "type": "module" to \\?\D:\アプリ開発プロジェクト\投資管理アプリ 試作２号\frontend\package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
 [2m20:25:01[22m [36m[1m[vite][22m[39m server restarted.
+[2m20:25:29[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
