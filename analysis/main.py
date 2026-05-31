@@ -190,9 +190,40 @@ def main():
         logger.info(f"Calculated metrics for {len(fund_flow_data)} sectors")
 
         # Step 3: 結果を DB に保存
-        # TODO: 実装では簡略化のため、DB 保存をスキップ
-        # insert_data = [...]
-        # db.insert_sector_fund_flow(insert_data)
+        try:
+            fund_flow_insert = [
+                {
+                    'date': analysis_date,
+                    'sector_id': item['sector_id'],
+                    'fund_flow_amount_jpy': int(item['trading_value']),
+                    'fund_flow_rank': item['rank'],
+                    'fund_flow_pct_change': float(item.get('perf_1d', 0.0)),
+                    'trend_5d': 'up' if item.get('perf_1d', 0) >= 0 else 'down'
+                }
+                for item in fund_flow_data
+            ]
+            if fund_flow_insert:
+                db.insert_sector_fund_flow(fund_flow_insert)
+                logger.info(f"Saved {len(fund_flow_insert)} sector fund flow records")
+
+            perf_insert = [
+                {
+                    'date': analysis_date,
+                    'sector_id': sector_id,
+                    'perf_1d': float(perf),
+                    'perf_5d': None,
+                    'perf_20d': None,
+                    'perf_60d': None,
+                    'vs_topix_1d': None
+                }
+                for sector_id, perf in performance_data.items()
+            ]
+            if perf_insert:
+                db.insert_sector_performance(perf_insert)
+                logger.info(f"Saved {len(perf_insert)} sector performance records")
+
+        except Exception as e:
+            logger.error(f"Failed to save metrics to database: {e}")
 
         # Step 4: Discord に通知
         webhook_url = os.getenv('DISCORD_WEBHOOK')

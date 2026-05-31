@@ -3,11 +3,13 @@ FastAPI メインアプリケーション
 セクター資金流入分析 API サーバー
 """
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import List, Dict, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+from data_ingestion.database import Database
 
 # ロギング設定
 logging.basicConfig(level=logging.INFO)
@@ -90,31 +92,27 @@ def get_fund_flow(
     セクター資金流入データを取得
 
     クエリパラメータ：
-    - date: 分析日付（省略時は最新）
+    - date: 分析日付（省略時は前営業日）
 
     レスポンス：
     - sectors: セクター資金流入ランキング
     """
     try:
-        # TODO: データベースからデータを取得
-        # 現在はダミーレスポンス
+        db = Database()
+        target_date = date_param or (date.today() - timedelta(days=1))
+        sectors_data = db.get_sector_fund_flow(target_date)
+
         return {
-            "date": date_param or date.today(),
+            "date": target_date,
             "sectors": [
-                {
-                    "sector_id": 1,
-                    "sector_name": "テクノロジー",
-                    "trading_value_jpy": 5000000000,
-                    "rank": 1,
-                    "change_1d_pct": 15.5
-                },
-                {
-                    "sector_id": 2,
-                    "sector_name": "金融",
-                    "trading_value_jpy": 3000000000,
-                    "rank": 2,
-                    "change_1d_pct": 8.2
-                }
+                SectorFundFlow(
+                    sector_id=s['sector_id'],
+                    sector_name=s['sector_name'],
+                    trading_value_jpy=s['trading_value_jpy'],
+                    rank=s['rank'],
+                    change_1d_pct=s['change_1d_pct']
+                )
+                for s in sectors_data
             ]
         }
     except Exception as e:
@@ -130,37 +128,31 @@ def get_performance(
     セクター別パフォーマンスを取得
 
     クエリパラメータ：
-    - date: 分析日付（省略時は最新）
+    - date: 分析日付（省略時は前営業日）
 
     レスポンス：
     - sectors: セクター別パフォーマンス（1d/5d/20d/60d）
     - topix_perf_1d: TOPIX 1日パフォーマンス
     """
     try:
-        # TODO: データベースからデータを取得
-        # 現在はダミーレスポンス
+        db = Database()
+        target_date = date_param or (date.today() - timedelta(days=1))
+        sectors_data = db.get_sector_performance(target_date)
+
         return {
-            "date": date_param or date.today(),
-            "topix_perf_1d": 1.2,
+            "date": target_date,
+            "topix_perf_1d": None,
             "sectors": [
-                {
-                    "sector_id": 1,
-                    "sector_name": "テクノロジー",
-                    "perf_1d": 2.5,
-                    "perf_5d": 1.8,
-                    "perf_20d": -0.5,
-                    "perf_60d": 8.3,
-                    "vs_topix_1d": 1.3
-                },
-                {
-                    "sector_id": 2,
-                    "sector_name": "金融",
-                    "perf_1d": 0.5,
-                    "perf_5d": -0.2,
-                    "perf_20d": -2.1,
-                    "perf_60d": -5.0,
-                    "vs_topix_1d": -0.7
-                }
+                SectorPerformance(
+                    sector_id=s['sector_id'],
+                    sector_name=s['sector_name'],
+                    perf_1d=s['perf_1d'],
+                    perf_5d=s['perf_5d'],
+                    perf_20d=s['perf_20d'],
+                    perf_60d=s['perf_60d'],
+                    vs_topix_1d=s['vs_topix_1d']
+                )
+                for s in sectors_data
             ]
         }
     except Exception as e:
@@ -185,18 +177,25 @@ def get_sector_history(
     - end_date: 終了日付
     """
     try:
-        # TODO: データベースからデータを取得
+        db = Database()
+        start = start_date or (date.today() - timedelta(days=30))
+        end = end_date or date.today()
+        history_data = db.get_sector_history(sector_id, start, end)
+
+        sector_name = ""
+        if history_data:
+            sector_name = "Sector"  # TODO: セクター名を取得
+        else:
+            all_sectors = db.get_all_sectors()
+            for s in all_sectors:
+                if s['sector_id'] == sector_id:
+                    sector_name = s['sector_name']
+                    break
+
         return {
             "sector_id": sector_id,
-            "sector_name": f"Sector {sector_id}",
-            "data": [
-                {
-                    "date": "2026-05-30",
-                    "fund_flow_jpy": 5000000000,
-                    "perf_1d": 2.5,
-                    "perf_5d": 1.8
-                }
-            ]
+            "sector_name": sector_name,
+            "data": history_data
         }
     except Exception as e:
         logger.error(f"Error fetching sector history: {e}")
@@ -209,12 +208,13 @@ def get_sectors_metadata():
     セクターメタデータを取得（ID と名前のマッピング）
     """
     try:
-        # TODO: データベースからデータを取得
+        db = Database()
+        sectors_data = db.get_all_sectors()
+
         return {
             "sectors": [
-                {"id": 1, "name": "テクノロジー"},
-                {"id": 2, "name": "金融"},
-                {"id": 3, "name": "エネルギー"}
+                {"sector_id": s['sector_id'], "sector_name": s['sector_name']}
+                for s in sectors_data
             ]
         }
     except Exception as e:

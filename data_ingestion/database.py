@@ -277,6 +277,181 @@ class Database:
         finally:
             session.close()
 
+    def get_sector_fund_flow(self, target_date) -> List[Dict]:
+        """
+        指定日付のセクター資金流入データを取得
+        Args:
+            target_date: 対象日付
+        Returns:
+            [{'sector_id': int, 'sector_name': str, 'trading_value_jpy': int, 'rank': int, 'change_1d_pct': float}]
+        """
+        session = self.get_session()
+        try:
+            query = """
+            SELECT
+              s.id as sector_id,
+              s.sector_name,
+              f.fund_flow_amount_jpy as trading_value_jpy,
+              f.fund_flow_rank as rank,
+              f.fund_flow_pct_change as change_1d_pct
+            FROM sector_fund_flow f
+            JOIN sectors s ON f.sector_id = s.id
+            WHERE f.date = :date
+            ORDER BY f.fund_flow_rank
+            """
+            results = session.execute(text(query), {'date': target_date}).fetchall()
+            return [
+                {
+                    'sector_id': r[0],
+                    'sector_name': r[1],
+                    'trading_value_jpy': r[2],
+                    'rank': r[3],
+                    'change_1d_pct': float(r[4]) if r[4] else 0.0
+                }
+                for r in results
+            ]
+        finally:
+            session.close()
+
+    def get_sector_performance(self, target_date) -> List[Dict]:
+        """
+        指定日付のセクターパフォーマンスデータを取得
+        Args:
+            target_date: 対象日付
+        Returns:
+            [{'sector_id': int, 'sector_name': str, 'perf_1d': float, 'perf_5d': float, ...}]
+        """
+        session = self.get_session()
+        try:
+            query = """
+            SELECT
+              s.id as sector_id,
+              s.sector_name,
+              p.perf_1d, p.perf_5d, p.perf_20d, p.perf_60d, p.vs_topix_1d
+            FROM sector_performance p
+            JOIN sectors s ON p.sector_id = s.id
+            WHERE p.date = :date
+            ORDER BY COALESCE(p.perf_1d, 0) DESC
+            """
+            results = session.execute(text(query), {'date': target_date}).fetchall()
+            return [
+                {
+                    'sector_id': r[0],
+                    'sector_name': r[1],
+                    'perf_1d': float(r[2]) if r[2] else None,
+                    'perf_5d': float(r[3]) if r[3] else None,
+                    'perf_20d': float(r[4]) if r[4] else None,
+                    'perf_60d': float(r[5]) if r[5] else None,
+                    'vs_topix_1d': float(r[6]) if r[6] else None
+                }
+                for r in results
+            ]
+        finally:
+            session.close()
+
+    def get_sector_history(self, sector_id, start_date, end_date) -> List[Dict]:
+        """
+        セクターの履歴データを取得
+        Args:
+            sector_id: セクター ID
+            start_date: 開始日付
+            end_date: 終了日付
+        Returns:
+            [{'date': date, 'fund_flow_jpy': int, 'perf_1d': float, 'perf_5d': float}]
+        """
+        session = self.get_session()
+        try:
+            query = """
+            SELECT
+              f.date,
+              f.fund_flow_amount_jpy as fund_flow_jpy,
+              p.perf_1d,
+              p.perf_5d
+            FROM sector_fund_flow f
+            LEFT JOIN sector_performance p
+              ON f.sector_id = p.sector_id AND f.date = p.date
+            WHERE f.sector_id = :sector_id
+              AND f.date BETWEEN :start_date AND :end_date
+            ORDER BY f.date DESC
+            """
+            results = session.execute(
+                text(query),
+                {'sector_id': sector_id, 'start_date': start_date, 'end_date': end_date}
+            ).fetchall()
+            return [
+                {
+                    'date': str(r[0]),
+                    'fund_flow_jpy': r[1],
+                    'perf_1d': float(r[2]) if r[2] else None,
+                    'perf_5d': float(r[3]) if r[3] else None
+                }
+                for r in results
+            ]
+        finally:
+            session.close()
+
+    def get_all_sectors(self) -> List[Dict]:
+        """
+        全セクターを取得
+        Returns:
+            [{'sector_id': int, 'sector_name': str}]
+        """
+        session = self.get_session()
+        try:
+            query = "SELECT id, sector_name FROM sectors ORDER BY id"
+            results = session.execute(text(query)).fetchall()
+            return [
+                {'sector_id': r[0], 'sector_name': r[1]}
+                for r in results
+            ]
+        finally:
+            session.close()
+
+    def get_stock_rankings(self, target_date, limit=10) -> List[Dict]:
+        """
+        指定日付の銘柄売買代金ランキング（Phase 4用）
+        Args:
+            target_date: 対象日付
+            limit: 取得件数
+        Returns:
+            [{'stock_code': str, 'stock_name': str, 'sector_name': str, 'trading_value_jpy': int, ...}]
+        """
+        session = self.get_session()
+        try:
+            query = """
+            SELECT
+              ms.stock_code,
+              ms.stock_name,
+              s.sector_name,
+              dt.trading_value_jpy,
+              COALESCE(dp.close_price, 0) as close_price,
+              COALESCE(dp.open_price, 0) as open_price
+            FROM daily_trading dt
+            JOIN master_stocks ms ON dt.stock_id = ms.id
+            JOIN sectors s ON ms.sector_id = s.id
+            LEFT JOIN daily_prices dp ON dt.stock_id = dp.stock_id AND dt.date = dp.date
+            WHERE dt.date = :date
+            ORDER BY dt.trading_value_jpy DESC NULLS LAST
+            LIMIT :limit
+            """
+            results = session.execute(
+                text(query),
+                {'date': target_date, 'limit': limit}
+            ).fetchall()
+            return [
+                {
+                    'stock_code': r[0],
+                    'stock_name': r[1],
+                    'sector_name': r[2],
+                    'trading_value_jpy': r[3],
+                    'close_price': float(r[4]) if r[4] else None,
+                    'open_price': float(r[5]) if r[5] else None
+                }
+                for r in results
+            ]
+        finally:
+            session.close()
+
 
 # グローバルインスタンス
 def get_db() -> Database:

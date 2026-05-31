@@ -47,10 +47,10 @@ class DiscordNotifier:
 
         try:
             # メッセージ本文作成
-            message = f"📊 **セクター市場分析 — {analysis_date}**\n\n"
+            message = f"📊 **東証セクター市場分析 — {analysis_date}**\n\n"
 
             # 流入セクター Top 5
-            message += "**💰 資金流入上位 5 セクター:**\n"
+            message += "**💰 資金流入上位セクター:**\n"
             for i, sector_data in enumerate(top_inflow_sectors[:5], 1):
                 sector_id = sector_data.get('sector_id')
                 sector_name = sector_names.get(sector_id, f"Sector {sector_id}")
@@ -59,7 +59,7 @@ class DiscordNotifier:
             message += "\n"
 
             # 流出セクター Top 5
-            message += "**📉 資金流出上位 5 セクター:**\n"
+            message += "**📉 資金流出上位セクター:**\n"
             for i, sector_data in enumerate(top_outflow_sectors[:5], 1):
                 sector_id = sector_data.get('sector_id')
                 sector_name = sector_names.get(sector_id, f"Sector {sector_id}")
@@ -68,7 +68,7 @@ class DiscordNotifier:
             message += "\n"
 
             # パフォーマンス変動（1日）
-            message += "**📈 パフォーマンス変動（1日）:**\n"
+            message += "**📈 パフォーマンス変動 (1日):**\n"
             perf_1d = performance_changes.get('1d', {})
             if perf_1d:
                 top_performers = sorted(
@@ -82,7 +82,7 @@ class DiscordNotifier:
             else:
                 message += "- データなし\n"
 
-            message += f"\n🔗 詳細分析: [ダッシュボード](https://github.com)\n"
+            message += f"\n🔗 詳細: [ダッシュボード](https://github.com)\n"
 
             # 送信
             webhook = DiscordWebhook(url=self.webhook_url, content=message)
