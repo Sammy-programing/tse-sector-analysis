@@ -18,6 +18,9 @@ jpbizday==0.4.1
 # Discord
 discord-webhook==1.1.0
 
+# Environment
+python-dotenv==1.0.0
+
 # Testing
 pytest==7.4.3
 pytest-cov==4.1.0
