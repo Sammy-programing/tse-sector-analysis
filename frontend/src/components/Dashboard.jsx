@@ -2,6 +2,10 @@ import { useQuery } from 'react-query'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import FundFlowChart from './FundFlowChart'
 import PerformanceChart from './PerformanceChart'
+import SectorHeatmap from './SectorHeatmap'
+import VolumeAnalysis from './VolumeAnalysis'
+import ComparisonTool from './ComparisonTool'
+import ExportButton from './ExportButton'
 
 const API_BASE_URL = '/api'
 
@@ -124,6 +128,35 @@ export default function Dashboard({ analysisDate, onSelectSector }) {
         </h2>
 
         <FundFlowChart data={fundFlowSectors} />
+      </section>
+
+      {/* ヒートマップセクション */}
+      <section>
+        <SectorHeatmap analysisDate={analysisDate} />
+      </section>
+
+      {/* 出来高分析セクション */}
+      <section>
+        <VolumeAnalysis analysisDate={analysisDate} />
+      </section>
+
+      {/* パフォーマンス比較ツール */}
+      <section>
+        <ComparisonTool analysisDate={analysisDate} />
+      </section>
+
+      {/* エクスポートセクション */}
+      <section className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">
+          データエクスポート
+        </h2>
+
+        <div className="flex items-center justify-between">
+          <p className="text-gray-600">
+            現在の分析データを CSV 形式でダウンロードできます
+          </p>
+          <ExportButton analysisDate={analysisDate} />
+        </div>
       </section>
     </div>
   )
