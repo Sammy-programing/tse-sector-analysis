@@ -1,0 +1,94 @@
+name: 毎営業日データ取得と分析
+
+on:
+  schedule:
+    # 毎月-金 6:00 UTC (= 15:00 JST の次営業日 6:00 UTC)
+    - cron: '0 6 * * 1-5'
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  ingest-and-analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 環境設定
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      # Step 1: TSE 営業日判定（祝日ならここで終了）
+      - name: TSE営業日判定
+        id: business_day
+        run: |
+          python << 'EOF'
+          import jpbizday
+          from datetime import datetime, timedelta, timezone
+
+          JST = timezone(timedelta(hours=9))
+          yesterday = (datetime.now(tz=JST) - timedelta(days=1)).date()
+
+          is_open = jpbizday.is_bizday(yesterday)
+          print(f"Date: {yesterday}, Is Business Day: {is_open}")
+
+          with open("$GITHUB_ENV", "a") as f:
+              f.write(f"SKIP={'false' if is_open else 'true'}\n")
+          EOF
+
+      - name: 祝日判定確認
+        if: env.SKIP == 'true'
+        run: echo "昨日は祝日または非営業日のためスキップします"
+
+      # Step 2: 依存関係インストール
+      - name: 依存関係インストール
+        if: env.SKIP == 'false'
+        run: pip install -r requirements.txt
+
+      # Step 3: データ取得実行
+      - name: データ取得実行
+        if: env.SKIP == 'false'
+        run: python -m data_ingestion.main
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          DATABASE_TYPE: supabase
+
+      # Step 4: 分析実行
+      - name: 分析実行
+        if: env.SKIP == 'false'
+        run: python -m analysis.main
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DATABASE_TYPE: supabase
+
+      # Step 5: 実行ログをアーティファクトに保存
+      - name: ログ保存
+        if: always()
+        run: |
+          echo "データ取得と分析が完了しました" > execution.log
+          date >> execution.log
+
+      - name: アーティファクトアップロード
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: execution-logs
+          path: execution.log
+          retention-days: 30
+
+  # 失敗通知
+  notify-on-failure:
+    needs: ingest-and-analyze
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 失敗通知
+        run: |
+          echo "データ取得・分析ジョブが失敗しました"
+          echo "詳細は以下を参照してください"
+          echo "リポジトリ: ${{ github.server_url }}/${{ github.repository }}"
+          echo "ワークフロー: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
