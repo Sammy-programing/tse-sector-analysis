@@ -1,20 +1,26 @@
 import os
-import sqlite3
 from datetime import datetime
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Database:
     def __init__(self):
         db_type = os.getenv('DATABASE_TYPE', 'sqlite')
 
         if db_type == 'supabase':
-            self.engine = create_engine(
-                f"postgresql://{os.getenv('SUPABASE_USER')}:{os.getenv('SUPABASE_PASSWORD')}"
-                f"@db.supabase.co:5432/{os.getenv('SUPABASE_DB')}"
-            )
+            user = os.getenv('SUPABASE_USER')
+            password = os.getenv('SUPABASE_PASSWORD')
+            db_name = os.getenv('SUPABASE_DB')
+
+            if not all([user, password, db_name]):
+                raise ValueError("Missing Supabase config: SUPABASE_USER, SUPABASE_PASSWORD, SUPABASE_DB")
+
+            url = f"postgresql://{user}:{password}@db.supabase.co:5432/{db_name}"
+            self.engine = create_engine(url)
         else:
-            # SQLite (開発用)
             os.makedirs('data', exist_ok=True)
             self.engine = create_engine('sqlite:///data/market.db')
 
@@ -42,10 +48,16 @@ class Database:
         ON CONFLICT (stock_code) DO NOTHING
         """
         session = self.get_session()
-        for stock in stocks:
-            session.execute(text(query), stock)
-        session.commit()
-        session.close()
+        try:
+            for stock in stocks:
+                session.execute(text(query), stock)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error inserting stocks: {e}")
+            raise
+        finally:
+            session.close()
 
     def insert_daily_prices(self, prices: list):
         """日次株価一括挿入"""
@@ -57,10 +69,16 @@ class Database:
             volume = EXCLUDED.volume
         """
         session = self.get_session()
-        for price in prices:
-            session.execute(text(query), price)
-        session.commit()
-        session.close()
+        try:
+            for price in prices:
+                session.execute(text(query), price)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error inserting prices: {e}")
+            raise
+        finally:
+            session.close()
 
 # グローバルインスタンス
 db = Database()
